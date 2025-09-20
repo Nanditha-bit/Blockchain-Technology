@@ -6,6 +6,39 @@ class MockBlockchainService {
   private files: Map<string, EncryptedFile> = new Map();
   private transactions: BlockchainTransaction[] = [];
 
+  constructor() {
+    this.loadFromStorage();
+  }
+
+  private saveToStorage(): void {
+    const data = {
+      files: Array.from(this.files.entries()),
+      transactions: this.transactions,
+      wallets: Array.from(this.wallets.entries())
+    };
+    localStorage.setItem('blockchain_data', JSON.stringify(data));
+  }
+
+  private loadFromStorage(): void {
+    try {
+      const saved = localStorage.getItem('blockchain_data');
+      if (saved) {
+        const data = JSON.parse(saved);
+        this.files = new Map(data.files?.map(([k, v]: [string, any]) => [
+          k, 
+          { ...v, uploadDate: new Date(v.uploadDate) }
+        ]) || []);
+        this.transactions = data.transactions?.map((tx: any) => ({
+          ...tx,
+          timestamp: new Date(tx.timestamp)
+        })) || [];
+        this.wallets = new Map(data.wallets || []);
+      }
+    } catch (error) {
+      console.warn('Failed to load from localStorage:', error);
+    }
+  }
+
   // Generate a mock wallet with public/private key pair
   generateWallet(): WalletInfo {
     const randomBytes = () => Math.random().toString(36).substring(2, 15);
@@ -76,6 +109,7 @@ class MockBlockchainService {
           };
           
           this.files.set(fileId, encryptedFile);
+          this.saveToStorage();
           
           // Create transaction record
           this.createTransaction({
@@ -85,10 +119,11 @@ class MockBlockchainService {
             from: ownerAddress,
             timestamp: new Date(),
             gasUsed: Math.floor(Math.random() * 100000) + 21000,
-            status: 'confirmed'
-          });
-          
-          resolve(encryptedFile);
+        status: 'confirmed'
+      });
+      this.saveToStorage();
+      
+      resolve(encryptedFile);
         };
         reader.readAsDataURL(file);
       }, 1000); // Simulate network delay
@@ -116,6 +151,7 @@ class MockBlockchainService {
         gasUsed: Math.floor(Math.random() * 50000) + 10000,
         status: 'confirmed'
       });
+      this.saveToStorage();
     }
     
     return true;
@@ -178,6 +214,7 @@ class MockBlockchainService {
 
   private createTransaction(transaction: BlockchainTransaction): void {
     this.transactions.push(transaction);
+    this.saveToStorage();
   }
 
   getTransactions(address: string): BlockchainTransaction[] {
